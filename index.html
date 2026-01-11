@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能证件照批量处理工具 (Web版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        .drag-active {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <header class="text-center mb-10">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">智能证件照批量处理工具 Web版</h1>
+            <p class="text-gray-500">无需上传服务器，所有处理均在本地浏览器完成</p>
+        </header>
+
+        <!-- Main Workspace -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+            
+            <!-- Settings Area -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 border-b pb-8">
+                <!-- Size Settings -->
+                <div>
+                    <h3 class="font-semibold text-lg mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                        尺寸设置
+                    </h3>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">宽度 (px)</label>
+                            <input type="number" id="targetWidth" value="295" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">高度 (px)</label>
+                            <input type="number" id="targetHeight" value="413" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2">
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2 mb-4">
+                        <button onclick="setSize(295, 413)" class="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-full transition">1寸</button>
+                        <button onclick="setSize(413, 579)" class="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-full transition">2寸</button>
+                        <button onclick="setSize(358, 441)" class="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-full transition">身份证</button>
+                        <button onclick="setSize(413, 531)" class="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-full transition">小2寸</button>
+                    </div>
+                </div>
+
+                <!-- Output Settings -->
+                <div>
+                    <h3 class="font-semibold text-lg mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                        输出设置
+                    </h3>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">格式</label>
+                            <select id="targetFormat" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2 bg-white">
+                                <option value="image/jpeg">JPEG (推荐)</option>
+                                <option value="image/png">PNG</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">文件前缀</label>
+                            <input type="text" id="filenamePrefix" value="processed_" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2">
+                        </div>
+                    </div>
+
+                    <div class="flex items-center space-x-4">
+                         <label class="flex items-center">
+                            <input type="checkbox" id="horizontalCenter" checked class="rounded text-blue-500 focus:ring-blue-500 h-4 w-4">
+                            <span class="ml-2 text-sm text-gray-600">水平居中</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="verticalCenter" class="rounded text-blue-500 focus:ring-blue-500 h-4 w-4">
+                            <span class="ml-2 text-sm text-gray-600">垂直居中</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Drag & Drop Zone -->
+            <div id="dropZone" class="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center cursor-pointer transition relative hover:border-blue-400">
+                <input type="file" id="fileInput" multiple accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                <div class="pointer-events-none">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    <p class="mt-2 text-lg font-medium text-gray-900">点击上传 或 拖放图片到这里</p>
+                    <p class="mt-1 text-sm text-gray-500">支持 JPG, PNG, WEBP, BMP</p>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div id="progressArea" class="hidden mt-6">
+                <div class="flex justify-between text-sm mb-1">
+                    <span id="progressText" class="text-blue-600 font-medium">处理中...</span>
+                    <span id="progressPercent" class="text-gray-500">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Area -->
+        <div id="resultsArea" class="hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800">处理结果 (<span id="resultCount">0</span>)</h3>
+                <button onclick="downloadAll()" id="downloadBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg shadow transition flex items-center font-medium">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    下载全部 (.zip)
+                </button>
+            </div>
+
+            <div id="gallery" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <!-- Image Cards will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Canvas for processing -->
+    <canvas id="processCanvas" class="hidden"></canvas>
+
+    <script>
+        // DOM Elements
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const progressArea = document.getElementById('progressArea');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const progressPercent = document.getElementById('progressPercent');
+        const resultsArea = document.getElementById('resultsArea');
+        const gallery = document.getElementById('gallery');
+        const resultCount = document.getElementById('resultCount');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        // Inputs
+        const targetWidthInput = document.getElementById('targetWidth');
+        const targetHeightInput = document.getElementById('targetHeight');
+        const targetFormatInput = document.getElementById('targetFormat');
+        const filenamePrefixInput = document.getElementById('filenamePrefix');
+        const horizontalCenterInput = document.getElementById('horizontalCenter');
+        const verticalCenterInput = document.getElementById('verticalCenter');
+
+        // State
+        let processedImages = []; // { file: Blob, name: string, url: string }
+        let isProcessing = false;
+
+        // --- Event Listeners ---
+
+        // Drag & Drop visual feedback
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('drag-active');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('drag-active');
+            }, false);
+        });
+
+        // Trigger processing on drop or select
+        dropZone.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        // --- Core Logic ---
+
+        function setSize(w, h) {
+            targetWidthInput.value = w;
+            targetHeightInput.value = h;
+            // Flash effect
+            targetWidthInput.classList.add('bg-blue-50');
+            targetHeightInput.classList.add('bg-blue-50');
+            setTimeout(() => {
+                targetWidthInput.classList.remove('bg-blue-50');
+                targetHeightInput.classList.remove('bg-blue-50');
+            }, 300);
+        }
+
+        async function handleFiles(fileList) {
+            if (isProcessing) return;
+            const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+            
+            if (files.length === 0) return;
+
+            // Reset
+            isProcessing = true;
+            processedImages = [];
+            gallery.innerHTML = '';
+            resultsArea.classList.remove('hidden');
+            progressArea.classList.remove('hidden');
+            downloadBtn.disabled = true;
+            downloadBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            const total = files.length;
+            let completed = 0;
+
+            const targetWidth = parseInt(targetWidthInput.value) || 295;
+            const targetHeight = parseInt(targetHeightInput.value) || 413;
+            const format = targetFormatInput.value;
+            const prefix = filenamePrefixInput.value;
+            const hCenter = horizontalCenterInput.checked;
+            const vCenter = verticalCenterInput.checked;
+
+            updateProgress(0, total);
+
+            for (let i = 0; i < total; i++) {
+                const file = files[i];
+                try {
+                    const blob = await processSingleImage(file, targetWidth, targetHeight, format, hCenter, vCenter);
+                    
+                    // Generate filename
+                    let ext = format === 'image/jpeg' ? '.jpg' : '.png';
+                    const originalName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+                    const newName = `${prefix}${originalName}${ext}`;
+
+                    // Store result
+                    const url = URL.createObjectURL(blob);
+                    processedImages.push({ blob, name: newName, url });
+
+                    // Add to gallery with fade-in
+                    addImageToGallery(url, newName);
+
+                } catch (err) {
+                    console.error("Failed to process", file.name, err);
+                }
+
+                completed++;
+                updateProgress(completed, total);
+                
+                // Yield to UI thread to keep browser responsive
+                await new Promise(r => setTimeout(r, 20));
+            }
+
+            // Finish
+            isProcessing = false;
+            progressText.innerText = `完成! 成功处理 ${processedImages.length} 张图片`;
+            downloadBtn.disabled = false;
+            downloadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            downloadBtn.innerHTML = `
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                下载全部 (${processedImages.length} 张)
+            `;
+            resultCount.innerText = processedImages.length;
+        }
+
+        function updateProgress(current, total) {
+            const percent = Math.round((current / total) * 100);
+            progressBar.style.width = `${percent}%`;
+            progressPercent.innerText = `${percent}%`;
+            if (current < total) {
+                progressText.innerText = `正在处理: ${current}/${total}`;
+            }
+        }
+
+        function processSingleImage(file, targetW, targetH, format, hCenter, vCenter) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas'); // Use new canvas instance for safety
+                    canvas.width = targetW;
+                    canvas.height = targetH;
+                    const ctx = canvas.getContext('2d');
+
+                    // --- Smart Crop Logic (Ported from Python) ---
+                    const imgW = img.width;
+                    const imgH = img.height;
+                    const targetRatio = targetW / targetH;
+                    const imgRatio = imgW / imgH;
+
+                    let cropW, cropH, cropX, cropY;
+
+                    if (Math.abs(imgRatio - targetRatio) < 0.01) {
+                         // Scale logic similar to Python
+                        const scale = Math.min(targetW / imgW, targetH / imgH);
+                        cropW = Math.round(targetW / scale);
+                        cropH = Math.round(targetH / scale);
+                    } else if (imgRatio > targetRatio) {
+                        // Image wider
+                        cropH = imgH;
+                        cropW = Math.round(cropH * targetRatio);
+                        if (cropW > imgW) {
+                            cropW = imgW;
+                            cropH = Math.round(cropW / targetRatio);
+                        }
+                    } else {
+                        // Image taller
+                        cropW = imgW;
+                        cropH = Math.round(cropW / targetRatio);
+                        if (cropH > imgH) {
+                            cropH = imgH;
+                            cropW = Math.round(cropH * targetRatio);
+                        }
+                    }
+
+                    // Centering
+                    if (hCenter) {
+                        cropX = Math.max(0, Math.floor((imgW - cropW) / 2));
+                    } else {
+                        cropX = 0;
+                    }
+
+                    if (vCenter) {
+                        cropY = Math.max(0, Math.floor((imgH - cropH) / 2));
+                    } else {
+                        cropY = 0;
+                    }
+
+                    // Bounds check (rarely needed with above logic but good for safety)
+                    if (cropX + cropW > imgW) cropX = imgW - cropW;
+                    if (cropY + cropH > imgH) cropY = imgH - cropH;
+
+                    // Draw to canvas (Resize happens here automatically)
+                    // drawImage(img, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight)
+                    ctx.fillStyle = "#FFFFFF"; // Background color for non-transparent formats
+                    ctx.fillRect(0, 0, targetW, targetH);
+                    
+                     // High quality scaling
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+
+                    ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, targetW, targetH);
+
+                    // Output
+                    canvas.toBlob((blob) => {
+                        if (blob) resolve(blob);
+                        else reject(new Error("Canvas to Blob failed"));
+                    }, format, 0.95);
+                };
+                img.onerror = reject;
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        function addImageToGallery(url, name) {
+            const div = document.createElement('div');
+            div.className = "group relative aspect-[3/4] bg-gray-100 rounded-lg overflow-hidden border hover:shadow-md transition";
+            div.innerHTML = `
+                <img src="${url}" class="w-full h-full object-cover">
+                <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center flex-col p-2 text-white text-center">
+                    <p class="text-xs break-all mb-2 font-mono">${name}</p>
+                    <a href="${url}" download="${name}" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs">
+                        下载
+                    </a>
+                </div>
+            `;
+            gallery.appendChild(div);
+        }
+
+        async function downloadAll() {
+            if (processedImages.length === 0) return;
+
+            const zip = new JSZip();
+            processedImages.forEach(item => {
+                zip.file(item.name, item.blob);
+            });
+
+            downloadBtn.innerText = "正在打包...";
+            
+            try {
+                const content = await zip.generateAsync({ type: "blob" });
+                saveAs(content, "证件照批量处理结果.zip");
+                
+                // Reset button text
+                downloadBtn.innerHTML = `
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    下载全部 (${processedImages.length} 张)
+                `;
+            } catch (e) {
+                alert("打包下载失败: " + e.message);
+                downloadBtn.innerText = "下载失败";
+            }
+        }
+    </script>
+</body>
+</html>
