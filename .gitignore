@@ -1,0 +1,13 @@
+
+__pycache__/
+*.py[cod]
+*$py.class
+.DS_Store
+.idea/
+.vscode/
+input_images/
+output_images/
+test_input/
+test_output/
+batch_output/
+*.log
